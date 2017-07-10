@@ -13,6 +13,7 @@ import hudson.EnvVars;
 import hudson.model.BuildListener;
 import hudson.model.AbstractBuild;
 import hudson.model.AbstractProject;
+import hudson.model.Result;
 import hudson.scm.SubversionSCM;
 
 import java.io.File;
@@ -38,9 +39,12 @@ public class SvnReverterTest extends AbstractMockitoTestCase {
     private static final String REMOTE_REPO_2 = "remote2";
     private static final int FIRST_CHANGE = 911;
     private static final int SECOND_CHANGE = FIRST_CHANGE + 1;
+    private static final Result NOT_SUCCESS = Result.UNSTABLE;
 
     private SvnReverter reverter;
-
+    private SvnReverter reverterWithPreviousMessage;
+    
+    
     @Mock
     private Messenger messenger;
     @Mock
@@ -76,6 +80,8 @@ public class SvnReverterTest extends AbstractMockitoTestCase {
     @Mock
     private ModuleFinder locationFinder;
 
+    private boolean includePreviousMessage;    
+
     private final IOException ioException = new IOException();
 
     private final List<Module> modules = Lists.newLinkedList();
@@ -89,27 +95,31 @@ public class SvnReverterTest extends AbstractMockitoTestCase {
         when(svnKitClient.commit(anyString(), any(File.class))).thenReturn(true);
         when(svnKitClient.commit(anyString(), any(File.class), any(File.class))).thenReturn(true);
         when(locationFinder.getModules(subversionScm)).thenReturn(modules);
-        reverter = new SvnReverter(build, messenger, svnFactory, locationFinder, changedRevisions);
+        reverter = new SvnReverter(build, messenger, svnFactory, locationFinder, changedRevisions, false);
+        reverterWithPreviousMessage = new SvnReverter(build, messenger, svnFactory, locationFinder, changedRevisions, true);
     }
 
     @Test
     public void shouldLogIfNoSvnAuthAvailable() throws Exception {
+        when(build.getResult()).thenReturn(NOT_SUCCESS);
         givenScmWithNoAuth();
-        reverter.revert(subversionScm);
+        reverter.revert(subversionScm,false);
         verify(messenger).informNoSvnAuthProvider();
     }
 
     @Test
     public void shouldReturnFailedIfNoSvnAuthAvailable() throws Exception {
+        when(build.getResult()).thenReturn(NOT_SUCCESS);
         givenScmWithNoAuth();
-        assertThat(reverter.revert(subversionScm), is(SvnRevertStatus.REVERT_FAILED));
+        assertThat(reverter.revert(subversionScm,false), is(SvnRevertStatus.REVERT_FAILED));
     }
 
     @Test
     public void shouldLogExceptionIfThrown() throws Exception {
+        when(build.getResult()).thenReturn(NOT_SUCCESS);
         givenScmWithAuth();
         when(locationFinder.getModules(subversionScm)).thenThrow(ioException);
-        reverter.revert(subversionScm);
+        reverter.revert(subversionScm,false);
         verify(messenger).printStackTraceFor(ioException);
     }
 
@@ -117,60 +127,76 @@ public class SvnReverterTest extends AbstractMockitoTestCase {
     public void shouldNotCatchRuntimeExceptionIfThrown() throws Exception {
         givenScmWithAuth();
         when(build.getEnvironment(listener)).thenThrow(new RuntimeException());
-        reverter.revert(subversionScm);
+        reverter.revert(subversionScm,false);
     }
 
     @Test
     public void shouldLogWhenRevertSuccessful() throws Exception {
+        when(build.getResult()).thenReturn(NOT_SUCCESS);
         givenAllRevertConditionsMet();
 
-        reverter.revert(subversionScm);
+        reverter.revert(subversionScm,false);
 
-        verify(messenger).informReverted(Revisions.create(FIRST_CHANGE), REMOTE_REPO);
+        verify(messenger).informReverted(Revisions.create(FIRST_CHANGE), REMOTE_REPO, NOT_SUCCESS.toString());
         verifyNoMoreInteractions(messenger);
     }
 
     @Test
     public void shouldReturnSuccessWhenRevertSuccessful() throws Exception {
+        when(build.getResult()).thenReturn(NOT_SUCCESS);
         givenAllRevertConditionsMet();
 
-        assertThat(reverter.revert(subversionScm), is(SvnRevertStatus.REVERT_SUCCESSFUL));
+        assertThat(reverter.revert(subversionScm,false), is(SvnRevertStatus.REVERT_SUCCESSFUL));
     }
 
     @Test
     public void shouldReturnNothingRevertedWhenFilesOutOfDate() throws Exception {
+        when(build.getResult()).thenReturn(NOT_SUCCESS);
         givenAllRevertConditionsMet();
         when(svnKitClient.commit(anyString(), any(File[].class))).thenReturn(false);
 
-        assertThat(reverter.revert(subversionScm), is(SvnRevertStatus.NOTHING_REVERTED));
+        assertThat(reverter.revert(subversionScm,false), is(SvnRevertStatus.NOTHING_REVERTED));
     }
 
     @Test
     public void shouldUseConfiguredMessageWhenReverting() throws Exception {
+        when(build.getResult()).thenReturn(NOT_SUCCESS);
         givenAllRevertConditionsMet();
 
-        reverter.revert(subversionScm);
+        reverter.revert(subversionScm,false);
 
         verify(svnKitClient).commit(buildCommitMessage(), moduleDir);
     }
+    
+    @Test
+    public void shouldUseConfiguredMessageWhenRevertingWithPreviousMessage() throws Exception {
+        when(build.getResult()).thenReturn(NOT_SUCCESS);
+        givenAllRevertConditionsMet();
+
+        reverterWithPreviousMessage.revert(subversionScm,true);
+
+        verify(svnKitClient).commit("null " + buildCommitMessage(), moduleDir);
+    }    
 
     @Test
     public void shouldRevertChangedRevision() throws Exception {
+        when(build.getResult()).thenReturn(NOT_SUCCESS);
         givenAllRevertConditionsMet();
 
-        reverter.revert(subversionScm);
+        reverter.revert(subversionScm,false);
 
         verify(svnKitClient).reverseMerge(Revisions.create(FIRST_CHANGE), svnUrl, moduleDir);
     }
 
     @Test
     public void shouldRevertChangedRevisionsInAllModulesWhenSameRevisionsChanged() throws Exception {
+        when(build.getResult()).thenReturn(NOT_SUCCESS);
         givenAllRevertConditionsMetForTwoModulesInSameRepo();
 
-        reverter.revert(subversionScm);
+        reverter.revert(subversionScm,false);
 
-        verify(messenger).informReverted(Revisions.create(FIRST_CHANGE), REMOTE_REPO);
-        verify(messenger).informReverted(Revisions.create(FIRST_CHANGE), REMOTE_REPO_2);
+        verify(messenger).informReverted(Revisions.create(FIRST_CHANGE), REMOTE_REPO, NOT_SUCCESS.toString());
+        verify(messenger).informReverted(Revisions.create(FIRST_CHANGE), REMOTE_REPO_2, NOT_SUCCESS.toString());
         verify(svnKitClient).reverseMerge(Revisions.create(FIRST_CHANGE), svnUrl, moduleDir);
         verify(svnKitClient).reverseMerge(Revisions.create(FIRST_CHANGE), svnUrl2, moduleDir2);
         verify(svnKitClient).commit(buildCommitMessage(), moduleDir, moduleDir2);
@@ -179,10 +205,11 @@ public class SvnReverterTest extends AbstractMockitoTestCase {
 
     @Test
     public void shouldLogRevertFailedWhenCommitFails() throws Exception {
+        when(build.getResult()).thenReturn(NOT_SUCCESS);
         givenAllRevertConditionsMet();
         doThrow(svnException).when(svnKitClient).commit(anyString(), any(File.class));
 
-        reverter.revert(subversionScm);
+        reverter.revert(subversionScm,false);
 
         verify(messenger).informNothingRevertedBecauseOf(svnException);
         verifyNoMoreInteractions(messenger);
@@ -190,28 +217,31 @@ public class SvnReverterTest extends AbstractMockitoTestCase {
 
     @Test
     public void shouldReturnRevertFailedWhenCommitFails() throws Exception {
+        when(build.getResult()).thenReturn(NOT_SUCCESS);    
         givenAllRevertConditionsMet();
         doThrow(svnException).when(svnKitClient).commit(anyString(), any(File.class));
 
-        assertThat(reverter.revert(subversionScm), is(SvnRevertStatus.NOTHING_REVERTED));
+        assertThat(reverter.revert(subversionScm,false), is(SvnRevertStatus.NOTHING_REVERTED));
     }
 
     @Test
     public void shouldRevertMultipleRevisionsWhenMultipleCommitsSinceLastBuild() throws Exception {
+        when(build.getResult()).thenReturn(NOT_SUCCESS);
         givenAllRevertConditionsMet();
         when(changedRevisions.getRevisions()).thenReturn(Revisions.create(FIRST_CHANGE, SECOND_CHANGE));
 
-        reverter.revert(subversionScm);
+        reverter.revert(subversionScm,false);
 
         verify(svnKitClient).reverseMerge(Revisions.create(FIRST_CHANGE, SECOND_CHANGE), svnUrl, moduleDir);
     }
-
+    
     @Test
     public void shouldLogNotRevertedWhenFileIsOutOfDate() throws Exception {
+        when(build.getResult()).thenReturn(NOT_SUCCESS);
         givenAllRevertConditionsMet();
         when(svnKitClient.commit(anyString(), any(File[].class))).thenReturn(false);
 
-        reverter.revert(subversionScm);
+        reverter.revert(subversionScm,false);
 
         verify(messenger).informFilesToRevertOutOfDate();
         verifyNoMoreInteractions(messenger);
@@ -219,6 +249,7 @@ public class SvnReverterTest extends AbstractMockitoTestCase {
 
     private void givenAllRevertConditionsMetForTwoModulesInSameRepo() throws Exception,
             IOException, InterruptedException {
+        when(build.getResult()).thenReturn(NOT_SUCCESS);            
         givenAllRevertConditionsMet();
         givenModuleLocations(moduleDir2, svnUrl2, REMOTE_REPO_2, LOCAL_REPO_2);
         when(changedRevisions.getRevisions()).thenReturn(Revisions.create(FIRST_CHANGE));
@@ -264,7 +295,7 @@ public class SvnReverterTest extends AbstractMockitoTestCase {
     private String buildCommitMessage() {
         return String.format(SvnReverter.REVERT_MESSAGE.replace("(s)", ""),
                 Revisions.create(FIRST_CHANGE).getAllInOrderAsString(),
-                JOB_NAME);
+                JOB_NAME, build.getResult().toString());
     }
 
 }

@@ -8,6 +8,8 @@ import hudson.tasks.Mailer;
 import javax.mail.MessagingException;
 import javax.mail.internet.MimeMessage;
 
+import java.io.UnsupportedEncodingException;
+
 class RevertMailSender extends MailSender {
 
     private final RevertMailFormatter formatter;
@@ -21,7 +23,7 @@ class RevertMailSender extends MailSender {
 
     @Override
     protected MimeMessage getMail(final AbstractBuild<?, ?> build, final BuildListener listener)
-            throws MessagingException, InterruptedException {
+            throws MessagingException, InterruptedException, UnsupportedEncodingException {
         final MimeMessage mail = super.getMail(build, listener);
         return formatter.format(mail, build, Mailer.descriptor().getUrl());
     }

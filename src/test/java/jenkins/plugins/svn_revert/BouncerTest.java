@@ -24,6 +24,7 @@ public class BouncerTest extends AbstractMockitoTestCase {
     private static final String REVERT = "revert";
     private static final Result NOT_SUCCESS = Result.UNSTABLE;
     private static final Result NOT_UNSTABLE = Result.SUCCESS;
+    private static final Result FAILURE = Result.FAILURE;
     @Mock
     private AbstractBuild build;
     @Mock
@@ -71,9 +72,16 @@ public class BouncerTest extends AbstractMockitoTestCase {
     public void shouldRevertWhenBuildResultIsUnstableAndPreviousResultIsSuccess() throws Exception {
         throwOutIfUnstable();
 
-        verify(reverter).revert(subversionScm);
+        verify(reverter).revert(subversionScm,false);
     }
 
+    @Test
+    public void shouldRevertWhenBuildResultIsFailureAndRevertFailureAndPreviousResultIsSuccess() throws Exception {
+        throwOutIfUnstable(true);
+
+        verify(reverter).revert(subversionScm,false);
+    }
+    
     @Test
     public void shouldNotRevertIfPreviousBuildWasNotSuccess() throws Exception {
         when(previousBuild.getResult()).thenReturn(NOT_SUCCESS);
@@ -101,6 +109,15 @@ public class BouncerTest extends AbstractMockitoTestCase {
         verifyNotReverted();
     }
 
+    @Test
+    public void shouldRevertWhenBuildResultIsFailureAndRevertFailure() throws Exception {
+        when(build.getResult()).thenReturn(Result.FAILURE);
+
+        throwOutIfUnstable(true);
+
+        verify(reverter).revert(subversionScm,false);
+    }    
+    
     @Test
     public void shouldNotRevertWhenBuildResultIsFailure() throws Exception {
         when(build.getResult()).thenReturn(Result.FAILURE);
@@ -161,6 +178,15 @@ public class BouncerTest extends AbstractMockitoTestCase {
 
         verify(messenger).informBuildStatusNotUnstable();
     }
+    
+    @Test
+    public void shouldLogWhenBuildResultIsSuccessAndRevertFailed() throws Exception {
+        when(build.getResult()).thenReturn(NOT_UNSTABLE);
+
+        throwOutIfUnstable(true);
+
+        verify(messenger).informBuildStatusSuccess();
+    }    
 
     @Test
     public void shouldLogWhenPreviousBuildResultIsNotSuccess() throws Exception {
@@ -220,6 +246,13 @@ public class BouncerTest extends AbstractMockitoTestCase {
 
         assertThat(throwOutIfUnstable(), is(true));
     }
+    
+    @Test
+    public void shouldReturnTrueWhenBuildResultIsSuccessAndRevertFailed() throws Exception {
+        when(build.getResult()).thenReturn(FAILURE);
+
+        assertThat(throwOutIfUnstable(true), is(true));
+    }    
 
     @Test
     public void shouldReturnTrueWhenPreviousBuildResultIsNotSuccess() throws Exception {
@@ -244,7 +277,7 @@ public class BouncerTest extends AbstractMockitoTestCase {
 
     @Test
     public void shouldFailBuildWhenRevertFails() throws Exception {
-        when(reverter.revert(subversionScm)).thenReturn(SvnRevertStatus.REVERT_FAILED);
+        when(reverter.revert(subversionScm,false)).thenReturn(SvnRevertStatus.REVERT_FAILED);
 
         assertThat(throwOutIfUnstable(), is(false));
     }
@@ -258,14 +291,14 @@ public class BouncerTest extends AbstractMockitoTestCase {
 
     @Test
     public void shouldNotFailBuildWhenRevertSucceeds() throws Exception {
-        when(reverter.revert(subversionScm)).thenReturn(SvnRevertStatus.REVERT_SUCCESSFUL);
+        when(reverter.revert(subversionScm,false)).thenReturn(SvnRevertStatus.REVERT_SUCCESSFUL);
 
         assertThat(throwOutIfUnstable(), is(true));
     }
 
     @Test
     public void shouldClaimWhenRevertSucceeds() throws Exception {
-        when(reverter.revert(subversionScm)).thenReturn(SvnRevertStatus.REVERT_SUCCESSFUL);
+        when(reverter.revert(subversionScm,false)).thenReturn(SvnRevertStatus.REVERT_SUCCESSFUL);
 
         throwOutIfUnstable();
 
@@ -274,7 +307,7 @@ public class BouncerTest extends AbstractMockitoTestCase {
 
     @Test
     public void shouldSendMailWhenRevertSucceeds() throws Exception {
-        when(reverter.revert(subversionScm)).thenReturn(SvnRevertStatus.REVERT_SUCCESSFUL);
+        when(reverter.revert(subversionScm,false)).thenReturn(SvnRevertStatus.REVERT_SUCCESSFUL);
 
         throwOutIfUnstable();
 
@@ -283,7 +316,7 @@ public class BouncerTest extends AbstractMockitoTestCase {
 
     @Test
     public void shouldNotClaimOrMailWhenRevertFails() throws Exception {
-        when(reverter.revert(subversionScm)).thenReturn(SvnRevertStatus.REVERT_FAILED);
+        when(reverter.revert(subversionScm,false)).thenReturn(SvnRevertStatus.REVERT_FAILED);
 
         throwOutIfUnstable();
 
@@ -293,7 +326,7 @@ public class BouncerTest extends AbstractMockitoTestCase {
 
     @Test
     public void shouldNotClaimOrMailWhenNothingReverted() throws Exception {
-        when(reverter.revert(subversionScm)).thenReturn(SvnRevertStatus.NOTHING_REVERTED);
+        when(reverter.revert(subversionScm,false)).thenReturn(SvnRevertStatus.NOTHING_REVERTED);
 
         throwOutIfUnstable();
 
@@ -302,8 +335,12 @@ public class BouncerTest extends AbstractMockitoTestCase {
     }
 
     private boolean throwOutIfUnstable() throws Exception {
+        return throwOutIfUnstable(false);
+    }
+    
+    private boolean throwOutIfUnstable(boolean revertFailed) throws Exception {
         return Bouncer.throwOutIfUnstable(build, launcher, messenger, reverter, claimer,
-                changeLocator, commitMessages, mailer, commitCountRule);
+                changeLocator, commitMessages, mailer, commitCountRule, revertFailed);
     }
 
     private void givenNotSubversionScm() {
@@ -320,7 +357,7 @@ public class BouncerTest extends AbstractMockitoTestCase {
     }
 
     private void verifyNotReverted() {
-        verify(reverter, never()).revert(subversionScm);
+        verify(reverter, never()).revert(subversionScm,false);
     }
 
 }

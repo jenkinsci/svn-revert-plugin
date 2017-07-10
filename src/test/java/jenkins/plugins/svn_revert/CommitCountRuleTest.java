@@ -33,7 +33,9 @@ public class CommitCountRuleTest extends AbstractMockitoTestCase {
     public void setUp() throws Exception {
         changeList = Lists.newLinkedList();
         changeList.add(change);
-        when(build.getChangeSet()).thenReturn(new FakeChangeLogSet(build, changeList));
+        FakeChangeLogSet changeLogSet = new FakeChangeLogSet(null, changeList);
+        when(build.getChangeSet()).thenReturn(changeLogSet);
+        //when(build.getChangeSet()).thenReturn(new FakeChangeLogSet(build, changeList));
         givenWillNotRevertMultipleCommits();
     }
 
