@@ -25,5 +25,10 @@ public class CommitCountRule {
         final ChangeLogSet<? extends Entry> changeSet = build.getChangeSet();
         return changeSet.getItems().length > 1;
     }
+    
+    public boolean singleCommitOnly() {
+        final ChangeLogSet<? extends Entry> changeSet = build.getChangeSet();
+        return changeSet.getItems().length == 1;        
+    }
 
 }

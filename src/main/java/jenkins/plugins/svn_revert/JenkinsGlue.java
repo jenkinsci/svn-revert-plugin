@@ -20,15 +20,28 @@ import org.kohsuke.stapler.StaplerRequest;
 
 public class JenkinsGlue extends Notifier {
 
+    private boolean revertFailed;
+    private boolean includePreviousMessage;
+
     @Override
     public BuildStepMonitor getRequiredMonitorService() {
         return BuildStepMonitor.BUILD;
     }
 
     @DataBoundConstructor
-    public JenkinsGlue() {
+    public JenkinsGlue(boolean revertFailed, boolean includePreviousMessage) {
+      this.revertFailed = revertFailed;
+      this.includePreviousMessage = includePreviousMessage;
+    }
+    
+    public boolean getRevertFailed() {
+      return revertFailed;
     }
 
+    public boolean getIncludePreviousMessage() {
+      return includePreviousMessage;
+    }
+    
     @Override
     public SvnRevertDescriptorImpl getDescriptor() {
         return (SvnRevertDescriptorImpl)super.getDescriptor();
@@ -43,13 +56,13 @@ public class JenkinsGlue extends Notifier {
         final ChangedFiles changedFiles = new ChangedFiles(build);
         final ModuleFinder locationFinder = new ModuleFinder(build, listener);
         final SvnReverter svnReverter = new SvnReverter(build, messenger, new SvnKitClientFactory(),
-                locationFinder, changedRevisions);
+                locationFinder, changedRevisions,this.includePreviousMessage);
         final Claimer claimer = new Claimer(changedRevisions, isClaimPluginPresent());
         final RevertMailSender mailer = new RevertMailSender(new RevertMailFormatter(changedRevisions), listener);
         final ChangeLocator changeLocator = new ChangeLocator(build, locationFinder, changedFiles );
         final CommitMessages commitMessages = new CommitMessages(build);
         final CommitCountRule commitCountRule = new CommitCountRule(build, getDescriptor().isRevertMultipleCommits());
-        return Bouncer.throwOutIfUnstable(build, launcher, messenger, svnReverter, claimer, changeLocator, commitMessages, mailer, commitCountRule);
+        return Bouncer.throwOutIfUnstable(build, launcher, messenger, svnReverter, claimer, changeLocator, commitMessages, mailer, commitCountRule, this.revertFailed);
     }
 
     private boolean isClaimPluginPresent() {

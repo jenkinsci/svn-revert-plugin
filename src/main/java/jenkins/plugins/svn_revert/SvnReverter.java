@@ -15,29 +15,33 @@ import com.google.common.collect.Lists;
 class SvnReverter {
 
     static final String REVERT_MESSAGE =
-            "Automatically reverted revision(s) %s since Jenkins build %s became UNSTABLE.";
+            "Automatically reverted revision(s) %s since Jenkins build %s became %s.";
     private final Messenger messenger;
     private final AbstractBuild<?, ?> build;
     private SvnKitClient svnKitClient;
     private final SvnKitClientFactory svnFactory;
     private final ModuleFinder locationFinder;
     private final ChangedRevisions changedRevisions;
+    private final boolean includePreviousMessage;
 
     SvnReverter(final AbstractBuild<?,?> build, final Messenger messenger,
             final SvnKitClientFactory svnFactory, final ModuleFinder locationFinder,
-            final ChangedRevisions changedRevisions) {
+            final ChangedRevisions changedRevisions, final boolean includePreviousMessage) {
         this.build = build;
         this.messenger = messenger;
         this.svnFactory = svnFactory;
         this.locationFinder = locationFinder;
         this.changedRevisions = changedRevisions;
+        this.includePreviousMessage = includePreviousMessage;
     }
-
     SvnRevertStatus revert(final SubversionSCM subversionScm) {
+        return revert(subversionScm,false);
+    }
+    SvnRevertStatus revert(final SubversionSCM subversionScm,final boolean singleCommitOnly) {
         final AbstractProject<?, ?> rootProject = build.getProject().getRootProject();
 
         try {
-            return revertAndCommit(rootProject, subversionScm);
+            return revertAndCommit(rootProject, subversionScm, singleCommitOnly);
         } catch (final RuntimeException e) {
             throw e;
         } catch (final NoSvnAuthException e) {
@@ -53,7 +57,7 @@ class SvnReverter {
     }
 
     private SvnRevertStatus revertAndCommit(final AbstractProject<?, ?> rootProject,
-            final SubversionSCM subversionScm)
+            final SubversionSCM subversionScm, final boolean singleCommitOnly)
     throws NoSvnAuthException, IOException, InterruptedException, SVNException {
         svnKitClient = svnFactory.create(rootProject, subversionScm);
 
@@ -67,8 +71,11 @@ class SvnReverter {
 
             moduleDirs.add(moduleDir);
         }
-
-        if (svnKitClient.commit(getRevertMessageFor(revisions, rootProject), moduleDirs.toArray(new File[0]))) {
+        String commitMessage = getRevertMessageFor(revisions, rootProject);
+        if (singleCommitOnly && includePreviousMessage) {
+                commitMessage =  changedRevisions.getCommitMessages() + " " + commitMessage;
+        }
+        if (svnKitClient.commit(commitMessage, moduleDirs.toArray(new File[0]))) {
             informReverted(revisions, modules);
         } else {
             messenger.informFilesToRevertOutOfDate();
@@ -80,12 +87,12 @@ class SvnReverter {
 
     private String getRevertMessageFor(final Revisions revisions, final AbstractProject<?, ?> rootProject) {
         final String revertMessage = StringHumanizer.pluralize(REVERT_MESSAGE, revisions.count());
-        return String.format(revertMessage, revisions.getAllInOrderAsString(), rootProject.getName());
+        return String.format(revertMessage, revisions.getAllInOrderAsString(), rootProject.getName(), build.getResult().toString());
     }
 
     private void informReverted(final Revisions revisions, final List<Module> modules) {
         for (final Module module : modules) {
-            messenger.informReverted(revisions, module.getURL());
+            messenger.informReverted(revisions, module.getURL(),build.getResult().toString());
         }
     }
 

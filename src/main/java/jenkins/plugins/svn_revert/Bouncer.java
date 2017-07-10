@@ -15,17 +15,24 @@ class Bouncer {
     static boolean throwOutIfUnstable(final AbstractBuild<?, ?> build, final Launcher launcher,
             final Messenger messenger, final SvnReverter svnReverter, final Claimer claimer,
             final ChangeLocator changeLocator, final CommitMessages commitMessages,
-            final RevertMailSender mailer, final CommitCountRule commitCountRule)
+            final RevertMailSender mailer, final CommitCountRule commitCountRule, final boolean revertFailed)
                     throws InterruptedException, IOException {
 
         if (isNotSubversionJob(build)) {
             messenger.informNotSubversionSCM();
             return true;
         }
-        if (currentBuildNotUnstable(build)) {
-            messenger.informBuildStatusNotUnstable();
-            return true;
-        }
+        if (revertFailed) {
+	   if (currentBuildSuccess(build)) {
+	       messenger.informBuildStatusSuccess();
+	       return true;
+	   }
+        } else {
+	    if (currentBuildNotUnstable(build)) {
+		messenger.informBuildStatusNotUnstable();
+		return true;
+	    }        
+        } 
         if (previousBuildNotSuccessful(build)) {
             messenger.informPreviousBuildStatusNotSuccess();
             return true;
@@ -48,7 +55,7 @@ class Bouncer {
             return true;
         }
 
-        final SvnRevertStatus revertStatus = svnReverter.revert(subversionScm);
+        final SvnRevertStatus revertStatus = svnReverter.revert(subversionScm,commitCountRule.singleCommitOnly());
         if (revertStatus == SvnRevertStatus.REVERT_FAILED) {
             return false;
         }
@@ -63,6 +70,10 @@ class Bouncer {
         return !(abstractBuild.getProject().getRootProject().getScm() instanceof SubversionSCM);
     }
 
+    private static boolean currentBuildSuccess(final AbstractBuild<?, ?> abstractBuild) {
+        return abstractBuild.getResult() == Result.SUCCESS;
+    }    
+    
     private static boolean currentBuildNotUnstable(final AbstractBuild<?, ?> abstractBuild) {
         return abstractBuild.getResult() != Result.UNSTABLE;
     }

@@ -2,6 +2,7 @@ package jenkins.plugins.svn_revert;
 
 import static hudson.model.Result.SUCCESS;
 import static hudson.model.Result.UNSTABLE;
+import static hudson.model.Result.FAILURE;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertThat;
 import hudson.FilePath;
@@ -86,6 +87,15 @@ public class PluginAcceptanceTest extends HudsonTestCase {
         assertNothingRevertedSince(ONE_COMMIT);
     }
 
+    public void testShouldNotRevertWhenBuildStatusChangesToFailedAndNotRevertFailed() throws Exception {
+        givenJobWithOneModule();
+
+        currentBuild = whenPreviousJobSuccessfulAndCurrentFailed();
+
+        assertBuildStatus(FAILURE, currentBuild);
+        assertNothingRevertedSince(ONE_COMMIT);
+    }    
+    
     public void testShouldLogAndRevertWhenBuildStatusChangesToUnstable() throws Exception {
         givenJobWithOneModule();
 
@@ -96,6 +106,17 @@ public class PluginAcceptanceTest extends HudsonTestCase {
         assertLogContains(svnUrl, currentBuild);
         assertLogContains(ONE_REVERTED_REVISION, currentBuild);
     }
+    
+    public void testShouldLogAndRevertWhenBuildStatusNotSuccessAndRevertFailed() throws Exception {
+        givenJobWithOneModule(true,false);
+
+        currentBuild = whenPreviousJobSuccessfulAndCurrentFailed();
+
+        assertBuildStatus(FAILURE, currentBuild);
+        assertFileReverted(MODIFIED_FILE_IN_MODULE_1);
+        assertLogContains(svnUrl, currentBuild);
+        assertLogContains(ONE_REVERTED_REVISION, currentBuild);
+    }    
 
     public void testCanRevertMultipleModulesInSameRepository() throws Exception {
         givenJobWithTwoModulesInSameRepository();
@@ -263,17 +284,20 @@ public class PluginAcceptanceTest extends HudsonTestCase {
 
     private void givenJobWithNullScm() throws Exception {
         job = createFreeStyleProject("no-scm-job");
-        job.getPublishersList().add(new JenkinsGlue());
+        job.getPublishersList().add(new JenkinsGlue(false,false));
         job.setAssignedLabel(hudson.getSelfLabel());
         job.setScm(new NullSCM());
     }
 
     private void givenJobWithOneModule() throws Exception {
+        givenJobWithOneModule(false,false);
+    }
+    private void givenJobWithOneModule(boolean revertFailed, boolean includePreviousMessage) throws Exception {
         job = createFreeStyleProject("subversion-scm-job");
-        job.getPublishersList().add(new JenkinsGlue());
+        job.getPublishersList().add(new JenkinsGlue(revertFailed, includePreviousMessage));
         job.setAssignedLabel(hudson.getSelfLabel());
         job.setScm(scm);
-    }
+    }    
 
     private FreeStyleBuild whenBuilding() throws Exception {
         final FreeStyleBuild build = scheduleBuild();
@@ -289,6 +313,14 @@ public class PluginAcceptanceTest extends HudsonTestCase {
         return whenBuilding();
     }
 
+    private FreeStyleBuild whenPreviousJobSuccessfulAndCurrentFailed() throws Exception,
+            InterruptedException, ExecutionException {
+        givenPreviousBuildSuccessful();
+        givenChangesInSubversionIn(MODIFIED_FILE_IN_MODULE_1);
+        givenNextBuildWillBe(FAILURE);
+        return whenBuilding();
+    }    
+    
     private FreeStyleBuild whenPreviousJobSuccesfulAndCurrentUnstableWithTwoChanges()
             throws Exception {
         givenPreviousBuildSuccessful();
