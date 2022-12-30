@@ -1,3 +1,4 @@
+<?jelly escape-by-default='true'?>
 <div>
   This plugin automatically performs Subversion reverting when the build status changes to unstable or failed.
 </div>

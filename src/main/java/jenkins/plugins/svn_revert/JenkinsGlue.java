@@ -13,6 +13,7 @@ import hudson.tasks.Publisher;
 
 import java.io.IOException;
 
+import jenkins.model.Jenkins;
 import net.sf.json.JSONObject;
 
 import org.kohsuke.stapler.DataBoundConstructor;
@@ -57,7 +58,7 @@ public class JenkinsGlue extends Notifier {
     }
 
     private boolean isPluginPresent(final String pluginName) {
-        return Hudson.getInstance().getPlugin(pluginName) != null;
+        return Jenkins.get().getPlugin(pluginName) != null;
     }
 
     @Extension(optional = true)
