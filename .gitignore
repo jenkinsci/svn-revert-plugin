@@ -1,4 +1,6 @@
-/bin
-/target
-build_copy_start.sh
-start_jenkins.sh
+work
+target
+*.iml
+*.ipr
+*.iws
+.idea
